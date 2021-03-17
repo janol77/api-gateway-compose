@@ -1,6 +1,5 @@
 # Api GateWay with Kong y Konga
 
-* 
 * [KONG Docker Image](https://hub.docker.com/_/kong)
 * [KONGA Docker Image](https://hub.docker.com/r/pantsel/konga/)
 * [Postgresql Docker Image](https://hub.docker.com/_/postgres)
