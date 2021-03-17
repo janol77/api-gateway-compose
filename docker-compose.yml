@@ -1,0 +1,85 @@
+version: '3.4'
+
+networks:
+    default-net:
+        ipam:
+            driver: default
+            config:
+              - subnet: "172.30.0.0/24"
+volumes:
+    main-db:
+
+services:
+    main-db:
+        image: postgres:11-alpine
+        volumes:
+            - main-db:/var/lib/postgresql/data
+            - ./sql:/docker-entrypoint-initdb.d
+        networks:
+            default-net:
+                ipv4_address: 172.30.0.10
+        environment: 
+            POSTGRES_PASSWORD: ${DATABASE_ROOT_PASSWORD}
+    kong-migration:
+        image: kong:2.3.2-alpine
+        command: "kong migrations bootstrap"
+        networks:
+            default-net:
+                ipv4_address: 172.30.0.11
+        restart: on-failure
+        environment:
+            KONG_DATABASE:         postgres
+            KONG_PG_HOST:          ${DATABASE_HOST}
+            KONG_PG_PORT:          ${DATABASE_PORT}
+            KONG_PG_DATABASE:      kong
+            KONG_PG_PASSWORD:      kong
+        depends_on:
+          - main-db
+
+    kong:
+        image: kong:2.3.2-alpine
+        restart: always
+        volumes:
+            - /var/log/kong-logs/:/home/kong/ 
+        depends_on:
+            - kong-migration
+            - main-db
+        networks:
+            default-net:
+                ipv4_address: 172.30.0.12
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://kong:8001"]
+            interval: 10s
+            timeout: 2s
+            retries: 15
+        environment:
+            KONG_DATABASE:         postgres
+            KONG_PG_HOST:          ${DATABASE_HOST}
+            KONG_PG_PORT:          ${DATABASE_PORT}
+            KONG_PG_DATABASE:      kong
+            KONG_PG_PASSWORD:      kong
+            KONG_PROXY_ACCESS_LOG: /dev/stdout
+            KONG_ADMIN_ACCESS_LOG: /dev/stdout
+            KONG_PROXY_ERROR_LOG:  /dev/stderr
+            KONG_ADMIN_ERROR_LOG:  /dev/stderr
+            KONG_PROXY_LISTEN:     0.0.0.0:8000, 0.0.0.0:8443 ssl
+            KONG_ADMIN_LISTEN:     0.0.0.0:8001, 0.0.0.0:8444 ssl
+            KONG_LOG_LEVEL:        debug
+### Instancia de KONGA ################################################
+    konga:
+        image: pantsel/konga:0.14.9
+        depends_on:
+            - main-db
+            - kong
+        networks:
+            default-net:
+                ipv4_address: 172.30.0.13
+        environment:
+            PORT: ${KONGA_PORT}
+            DB_ADAPTER: postgres
+            DB_HOST: ${DATABASE_HOST}
+            DB_PORT: '${DATABASE_PORT}'
+            DB_USER: konga
+            DB_PASSWORD: konga
+            DB_DATABASE: konga
+            NODE_ENV: development
